@@ -24,7 +24,9 @@ function renderInsights() {
     people: NL.store.get("prefs", {}).people || 4,
     choresUnassigned: chores.length && !members.length ? chores.length : 0
   });
-  $("#insights").innerHTML = insights.map(i => `<div class="insight">${esc(i)}</div>`).join("");
+  const tone = (t) => /bill/i.test(t) ? "urgent" : /chore/i.test(t) ? "warn" : "calm";
+  $("#insights").innerHTML = insights.map(i =>
+    `<div class="insight ${tone(i)}"><span class="dot" aria-hidden="true"></span><div>${esc(i)}</div></div>`).join("");
 }
 
 /* ---------- Meals ---------- */
@@ -43,9 +45,11 @@ function renderPlan() {
     return;
   }
   box.innerHTML = plan.days.map((d, i) =>
-    `<div class="meal-day"><span class="day">${d.day}</span>
-     <span class="meal">${esc(d.meal.name)}<small>${d.meal.timeMin} min · ~${NL.fmtMoney(d.meal.costPerServing)}/serving</small></span>
-     <button class="ghost" data-swap="${i}">Swap</button></div>`
+    `<div class="meal-day" style="animation-delay:${Math.min(i * 40, 280)}ms">
+       <div class="day">${d.day}</div>
+       <div class="meal">${esc(d.meal.name)}<small>${d.meal.timeMin} min · ~${NL.fmtMoney(d.meal.costPerServing)}/serving</small></div>
+       <button class="ghost" data-swap="${i}">Swap</button>
+     </div>`
   ).join("");
   box.querySelectorAll("[data-swap]").forEach(b => b.addEventListener("click", () => {
     const plan = NL.store.get("plan");
@@ -77,13 +81,15 @@ function renderGroceries() {
   }
   const list = NL.aggregateGroceries(plan);
   const total = list.reduce((s, i) => s + i.estCost, 0);
-  $("#groceryTotal").textContent = "Estimated total: " + NL.fmtMoney(total);
+  $("#groceryTotal").textContent = `${list.length} items · built from your meal plan`;
+  box.innerHTML = box.innerHTML + `<div class="receipt-total"><span>Estimated total</span><span>${NL.fmtMoney(total)}</span></div>`;
   box.innerHTML = list.map((g, i) => {
     const key = (g.name + "|" + g.unit).toLowerCase();
     const isChecked = !!checked[key];
     return `<label class="grocery-item${isChecked ? " checked" : ""}">
       <input type="checkbox" data-g="${esc(key)}"${isChecked ? " checked" : ""}>
-      <span class="gname">${esc(g.name)} — <strong>${NL.roundQty(g.qty)} ${esc(g.unit)}</strong></span>
+      <span class="gname">${esc(g.name)}</span>
+      <span class="gqty">${NL.roundQty(g.qty)} ${esc(g.unit)} · ${NL.fmtMoney(g.estCost)}</span>
     </label>`;
   }).join("");
   box.querySelectorAll("[data-g]").forEach(c => c.addEventListener("change", () => {
@@ -100,13 +106,17 @@ function renderBills() {
   const box = $("#bills");
   if (!bills.length) { box.innerHTML = `<p class="empty">No bills yet. Add one below and I'll remind you before it's due.</p>`; return; }
   const sorted = bills.slice().sort((a, b) => a.dueDate.localeCompare(b.dueDate));
-  box.innerHTML = sorted.map(b => {
+  box.innerHTML = sorted.map((b, idx) => {
     const nudge = NL.billNudge(b);
     const today = new Date(); const due = new Date(b.dueDate + "T12:00:00");
     const diff = Math.round((due - new Date(today.getFullYear(), today.getMonth(), today.getDate())) / 86400000);
-    const pill = diff <= 3 ? `<span class="pill soon">soon</span>` : `<span class="pill ok">ok</span>`;
-    return `<div class="bill"><div class="nudge">${esc(nudge)}${pill}</div>
-      <div class="meta">${NL.fmtMoney(b.amount)} · due ${esc(b.dueDate)} · <button class="danger" data-delbill="${b.id}">mark paid / remove</button></div></div>`;
+    const cls = diff < 0 ? "over" : diff <= 3 ? "soon" : "ok";
+    const pill = diff < 0 ? `<span class="pill over">overdue</span>` : diff <= 3 ? `<span class="pill soon">soon</span>` : `<span class="pill ok">ok</span>`;
+    return `<div class="bill" style="animation-delay:${Math.min(idx * 40, 240)}ms">
+      <div class="nudge">${esc(nudge)}${pill}</div>
+      <div class="meta">${NL.fmtMoney(b.amount)} · due ${esc(b.dueDate)}</div>
+      <button class="ghost danger" data-delbill="${b.id}">mark paid / remove</button>
+    </div>`;
   }).join("");
   box.querySelectorAll("[data-delbill]").forEach(btn => btn.addEventListener("click", () => {
     NL.store.set("bills", NL.store.get("bills", []).filter(b => b.id !== btn.dataset.delbill));
@@ -137,7 +147,7 @@ function renderChores() {
   const box = $("#choreList");
   if (!chores.length) { box.innerHTML = `<p class="empty">No chores yet — add a few below and I'll rotate them fairly.</p>`; return; }
   box.innerHTML = chores.map(c =>
-    `<div class="chore-row"><span>${esc(c)}</span><button class="danger" data-delchore="${esc(c)}">remove</button></div>`
+    `<div class="chore-row"><span>${esc(c)}</span><button class="ghost danger" data-delchore="${esc(c)}">remove</button></div>`
   ).join("");
   box.querySelectorAll("[data-delchore]").forEach(btn => btn.addEventListener("click", () => {
     NL.store.set("chores", NL.store.get("chores", []).filter(c => c !== btn.dataset.delchore));
@@ -154,9 +164,16 @@ function renderRotation() {
     box.innerHTML = `<p class="empty">Add family members and chores to see this week's fair rotation.</p>`;
     return;
   }
+  const colorFor = (name) => `var(--m${(members.indexOf(name) % 6 + 6) % 6 + 1})`;
   const rows = NL.choreRotation(members, chores, week);
   box.innerHTML = `<p class="sub">Week ${week + 1} rotation — it shifts automatically so nobody's stuck with the same chore.</p>` +
-    rows.map(r => `<div class="chore-row"><span>${esc(r.chore)}</span><span class="who">${esc(r.member)}</span></div>`).join("");
+    `<div class="chore-board">` + rows.map((r, i) => {
+      const col = colorFor(r.member);
+      return `<div class="chore-card" style="--mc:${col};animation-delay:${Math.min(i * 40, 240)}ms">
+        <div class="chore-name">${esc(r.chore)}</div>
+        <div class="who"><span class="member-dot" style="--mc:${col}">${esc(r.member.charAt(0).toUpperCase())}</span>${esc(r.member)}</div>
+      </div>`;
+    }).join("") + `</div>`;
 }
 
 /* ---------- helpers ---------- */

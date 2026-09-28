@@ -8,30 +8,36 @@
 </head>
 <body>
 <header class="topbar">
-  <h1><span class="leaf" aria-hidden="true"></span> NestLife</h1>
-  <p>Meals, groceries, bills and chores — one calm place. 100% local, works offline.</p>
-</header>
-
-<main>
-  <nav class="tabs">
+  <div class="topbar-inner">
+    <div class="brandmark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></svg>
+    </div>
+    <div>
+      <h1 class="brand">NestLife <span>AI</span></h1>
+      <p class="tagline">Meals, groceries, bills and chores — one calm place. 100% local, works offline.</p>
+    </div>
+  </div>
+  <nav class="tabs" aria-label="Sections">
     <button data-tab="home" class="active">Home</button>
     <button data-tab="meals">Meals</button>
     <button data-tab="groceries">Groceries</button>
     <button data-tab="bills">Bills</button>
     <button data-tab="chores">Chores</button>
   </nav>
+</header>
 
+<main class="wrap">
   <section class="tab" data-tab="home">
-    <div class="card">
+    <div class="board-head">
       <h2>Good to see you</h2>
       <p class="sub">Here's what needs your attention right now.</p>
-      <div id="insights"></div>
     </div>
-    <div class="card">
-      <h2>Your week at a glance</h2>
+    <div id="insights" class="insight-grid"></div>
+    <div class="card week-card">
+      <h3>Your week at a glance</h3>
       <p class="sub">Plan meals, check groceries, stay ahead of bills — tap a tab above to get started.</p>
       <div class="row">
-        <button class="ghost" id="resetBtn">Reset all my data</button>
+        <button class="ghost danger" id="resetBtn">Reset all my data</button>
       </div>
     </div>
   </section>
@@ -40,7 +46,7 @@
     <div class="card">
       <h2>Weekly meal planner</h2>
       <p class="sub">Tell me your preferences and I'll build a week of family dinners from 36 real recipes. Swap anything you don't like.</p>
-      <div class="row">
+      <div class="pref-row">
         <label class="field">Diet
           <select id="diet">
             <option value="any">Anything</option>
@@ -57,36 +63,35 @@
           </select>
         </label>
         <label class="field">People
-          <input id="people" type="number" min="1" max="12" value="4" style="width:70px">
+          <input id="people" type="number" min="1" max="12" value="4">
         </label>
         <button class="primary" id="planBtn">Plan my week</button>
       </div>
     </div>
-    <div class="card">
-      <h2>This week's dinners</h2>
-      <div id="plan"><p class="empty">No plan yet.</p></div>
-    </div>
+    <h2 class="section-title">This week's dinners</h2>
+    <div id="plan" class="meal-grid"><p class="empty">No plan yet.</p></div>
   </section>
 
   <section class="tab" data-tab="groceries" hidden>
-    <div class="card">
-      <h2>Grocery list</h2>
-      <p class="sub" id="groceryTotal">Automatically built from your meal plan.</p>
+    <div class="receipt">
+      <div class="receipt-head">
+        <h2>Grocery list</h2>
+        <p class="sub" id="groceryTotal">Automatically built from your meal plan.</p>
+      </div>
       <div id="groceries"><p class="empty">Your grocery list appears here once you plan a week of meals.</p></div>
+      <div class="receipt-tear" aria-hidden="true"></div>
     </div>
   </section>
 
   <section class="tab" data-tab="bills" hidden>
+    <h2 class="section-title">Bills</h2>
+    <p class="sub">Add a bill and I'll nudge you in plain language before it's due.</p>
+    <div id="bills" class="bill-stack"><p class="empty">No bills yet.</p></div>
     <div class="card">
-      <h2>Bills</h2>
-      <p class="sub">Add a bill and I'll nudge you in plain language before it's due.</p>
-      <div id="bills"><p class="empty">No bills yet.</p></div>
-    </div>
-    <div class="card">
-      <h2>Add a bill</h2>
-      <div class="row">
+      <h3>Add a bill</h3>
+      <div class="pref-row">
         <label class="field">Name <input id="billName" placeholder="Electric bill"></label>
-        <label class="field">Amount ($) <input id="billAmount" type="number" min="0" step="0.01" placeholder="85.00" style="width:110px"></label>
+        <label class="field">Amount ($) <input id="billAmount" type="number" min="0" step="0.01" placeholder="85.00"></label>
         <label class="field">Due date <input id="billDue" type="date"></label>
         <button class="primary" id="billBtn">Add bill</button>
       </div>
@@ -97,30 +102,28 @@
     <div class="card">
       <h2>Chore rotation</h2>
       <p class="sub">Family: <strong id="memberList">Nobody yet</strong></p>
-      <div class="row">
+      <div class="pref-row">
         <label class="field">Add family member <input id="memberName" placeholder="Sam"></label>
         <button class="primary" id="memberBtn">Add</button>
       </div>
-      <div class="row" style="margin-top:10px">
+      <div class="pref-row">
         <label class="field">Add chore <input id="choreName" placeholder="Take out trash"></label>
         <button class="primary" id="choreBtn">Add</button>
       </div>
     </div>
-    <div class="card">
-      <h2>All chores</h2>
-      <div id="choreList"><p class="empty">No chores yet.</p></div>
+    <h2 class="section-title">This week's assignments</h2>
+    <div id="rotation" class="chore-board"></div>
+    <div class="row">
+      <button class="ghost" id="nextWeekBtn">Advance to next week →</button>
     </div>
-    <div class="card">
-      <h2>This week's assignments</h2>
-      <div id="rotation"></div>
-      <div class="row" style="margin-top:10px">
-        <button class="ghost" id="nextWeekBtn">Advance to next week →</button>
-      </div>
+    <div class="card" style="margin-top:1rem">
+      <h3>All chores</h3>
+      <div id="choreList"><p class="empty">No chores yet.</p></div>
     </div>
   </section>
 </main>
 
-<footer>NestLife AI · your data never leaves this device · free forever core</footer>
+<footer class="foot">NestLife AI · your data never leaves this device · free forever core</footer>
 
 <script src="js/logic.js"></script>
 <script src="js/recipes.js"></script>
