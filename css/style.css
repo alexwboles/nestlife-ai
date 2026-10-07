@@ -11,7 +11,7 @@
   --accent-soft: #f0f6e6;
   --warn: #b45309;
   --bad: #b91c1c;
-  --radius: 16px;
+  --radius: 0;
   --shadow: 0 1px 2px rgba(43, 38, 32, .05), 0 10px 26px -14px rgba(43, 38, 32, .2);
   --font: "Avenir Next", "Segoe UI", system-ui, -apple-system, Roboto, "Helvetica Neue", Arial, sans-serif;
   --m1: #5b8c2a; --m2: #c2703d; --m3: #3d7dc2; --m4: #a04dc2; --m5: #c23d5e; --m6: #2aa198;
@@ -45,7 +45,7 @@ p { margin: 0 0 .75em; }
   display: flex; align-items: center; gap: .9rem;
 }
 .brandmark {
-  width: 44px; height: 44px; border-radius: 14px; flex: 0 0 auto;
+  width: 44px; height: 44px; border-radius: 0; flex: 0 0 auto;
   display: grid; place-items: center;
   background: var(--accent); color: #fff;
   box-shadow: 0 6px 14px -6px rgba(91, 140, 42, .7);
@@ -54,13 +54,13 @@ p { margin: 0 0 .75em; }
 .brand span {
   font-size: .66rem; font-weight: 700; vertical-align: .35em; letter-spacing: .08em;
   background: var(--accent-soft); color: var(--accent-deep);
-  padding: .15em .5em; border-radius: 999px;
+  padding: .15em .5em; border-radius: 0;
 }
 .tagline { margin: .1rem 0 0; font-size: .85rem; color: var(--ink-soft); }
 .tabs { max-width: 1020px; margin: 0 auto; display: flex; gap: .3rem; overflow-x: auto; }
 nav.tabs button:not(.active) {
   background: transparent; border: 1px solid transparent; color: var(--ink-soft);
-  font-weight: 700; font-size: .92rem; padding: .5rem 1.05rem; border-radius: 999px;
+  font-weight: 700; font-size: .92rem; padding: .5rem 1.05rem; border-radius: 0;
   white-space: nowrap; cursor: pointer; transition: all .15s;
   box-shadow: none; transform: none;
 }
@@ -71,7 +71,7 @@ nav.tabs button.active { background: var(--ink); color: #fdfaf3; box-shadow: non
 .wrap { max-width: 1020px; margin: 0 auto; padding: 1.4rem 1.25rem 3rem; }
 .card {
   background: var(--card); border: 1px solid var(--line);
-  border-radius: var(--radius); box-shadow: var(--shadow);
+  border-radius: 0; box-shadow: var(--shadow);
   padding: 1.25rem 1.35rem; margin-bottom: 1.1rem;
 }
 .section-title { margin: 1.4rem 0 .8rem; font-size: 1.15rem; }
@@ -80,7 +80,7 @@ nav.tabs button.active { background: var(--ink); color: #fdfaf3; box-shadow: non
 /* ---------- buttons / inputs ---------- */
 button {
   font: inherit; font-weight: 650; cursor: pointer;
-  border-radius: 11px; border: 1px solid transparent; padding: .55rem 1.05rem;
+  border-radius: 0; border: 1px solid transparent; padding: .55rem 1.05rem;
   transition: transform .12s, box-shadow .15s, background .15s;
 }
 button.primary, button:not(.ghost):not(.danger) {
@@ -94,7 +94,7 @@ button.danger { color: var(--bad); }
 button.ghost.danger { border-color: #eccaca; }
 input, select, textarea {
   font: inherit; color: var(--ink); width: 100%;
-  border: 1.5px solid var(--line); border-radius: 10px;
+  border: 1.5px solid var(--line); border-radius: 0;
   padding: .55rem .7rem; background: #fff;
   transition: border-color .15s, box-shadow .15s;
 }
@@ -114,7 +114,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 .insight-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: .9rem; margin-bottom: 1.2rem; }
 .insight {
   background: var(--card); border: 1px solid var(--line); border-left: 5px solid var(--accent);
-  border-radius: 12px; box-shadow: var(--shadow); padding: .95rem 1.05rem;
+  border-radius: 0; box-shadow: var(--shadow); padding: .95rem 1.05rem;
   font-size: .93rem; display: flex; gap: .7rem; align-items: flex-start;
   animation: rise .35s ease both;
 }
@@ -129,7 +129,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 /* ---------- meals: 7-day strip ---------- */
 .meal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: .9rem; }
 .meal-day {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); border: 1px solid var(--line); border-radius: 0;
   box-shadow: var(--shadow); overflow: hidden; display: flex; flex-direction: column;
   animation: rise .35s ease both;
 }
@@ -143,7 +143,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 
 /* ---------- groceries: receipt ---------- */
 .receipt {
-  background: #fffdf8; border: 1px solid var(--line); border-radius: 6px;
+  background: #fffdf8; border: 1px solid var(--line); border-radius: 0;
   box-shadow: var(--shadow); padding: 1.4rem 1.5rem 0; max-width: 640px; margin: 0 auto;
 }
 .receipt-head { text-align: center; border-bottom: 2px dashed var(--line); padding-bottom: .9rem; margin-bottom: .4rem; }
@@ -170,7 +170,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 /* ---------- bills: reminder slips ---------- */
 .bill-stack { display: grid; gap: .8rem; margin-bottom: 1.1rem; }
 .bill {
-  background: var(--card); border: 1px solid var(--line); border-radius: 12px;
+  background: var(--card); border: 1px solid var(--line); border-radius: 0;
   box-shadow: var(--shadow); padding: .95rem 1.1rem;
   display: flex; align-items: center; gap: 1rem; flex-wrap: wrap;
   animation: rise .3s ease both;
@@ -179,7 +179,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 .bill .meta { color: var(--ink-soft); font-size: .85rem; display: flex; align-items: center; gap: .6rem; font-variant-numeric: tabular-nums; }
 .pill {
   font-size: .68rem; font-weight: 800; letter-spacing: .07em; text-transform: uppercase;
-  padding: .2rem .6rem; border-radius: 999px; white-space: nowrap;
+  padding: .2rem .6rem; border-radius: 0; white-space: nowrap;
 }
 .pill.soon { background: #fde8e8; color: var(--bad); }
 .pill.ok { background: var(--accent-soft); color: var(--accent-deep); }
@@ -188,7 +188,7 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 /* ---------- chores: rotation board ---------- */
 .chore-board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: .9rem; margin-bottom: 1rem; }
 .chore-card {
-  background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+  background: var(--card); border: 1px solid var(--line); border-radius: 0;
   box-shadow: var(--shadow); padding: 1rem 1.1rem; position: relative; overflow: hidden;
   animation: rise .3s ease both;
 }
