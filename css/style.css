@@ -104,6 +104,7 @@ input:focus, select:focus, button:focus-visible {
 }
 input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent); flex: 0 0 auto; }
 .field { display: flex; flex-direction: column; gap: .3rem; font-size: .82rem; font-weight: 700; color: var(--ink-soft); min-width: 130px; }
+.field.check-row { flex-direction: row; align-items: center; gap: .55rem; min-width: 0; font-weight: 600; }
 .pref-row { display: flex; gap: .7rem; align-items: flex-end; flex-wrap: wrap; margin-top: .8rem; }
 .pref-row .field { flex: 1 1 130px; }
 .pref-row button { flex: 0 0 auto; }
@@ -140,6 +141,8 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 .meal-day .meal { padding: .85rem .95rem .4rem; font-weight: 700; font-size: 1rem; flex: 1; }
 .meal-day .meal small { display: block; font-weight: 500; color: var(--ink-soft); font-size: .8rem; margin-top: .25rem; }
 .meal-day button { margin: .6rem .9rem .9rem; align-self: flex-start; font-size: .82rem; padding: .4rem .8rem; }
+.meal-day .btnrow { padding: 0 .9rem .9rem; }
+.meal-day .btnrow button { margin: 0; align-self: auto; }
 
 /* ---------- groceries: receipt ---------- */
 .receipt {
@@ -220,4 +223,12 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
 }
 @media (max-width: 420px) {
   .meal-grid { grid-template-columns: 1fr; }
+}
+
+/* ---------- grocery print ---------- */
+@media print {
+  .topbar, nav.tabs, .foot, button, #resetBtn, .receipt-head .row { display: none !important; }
+  body { background: #fff; }
+  .receipt { box-shadow: none; max-width: none; }
+  .grocery-item input[type="checkbox"] { display: none; }
 }

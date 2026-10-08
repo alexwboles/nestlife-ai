@@ -65,11 +65,13 @@
         <label class="field">People
           <input id="people" type="number" min="1" max="12" value="4">
         </label>
+        <label class="field check-row"><input type="checkbox" id="quickCook" style="width:auto"> 30-minute weeknights only</label>
         <button class="primary" id="planBtn">Plan my week</button>
       </div>
     </div>
     <h2 class="section-title">This week's dinners</h2>
     <div id="plan" class="meal-grid"><p class="empty">No plan yet.</p></div>
+    <div id="dislikeBar" class="sub" style="margin-top:.8rem"></div>
   </section>
 
   <section class="tab" data-tab="groceries" hidden>
@@ -77,6 +79,10 @@
       <div class="receipt-head">
         <h2>Grocery list</h2>
         <p class="sub" id="groceryTotal">Automatically built from your meal plan.</p>
+        <div class="row" style="justify-content:center;margin-top:.5rem">
+          <button class="ghost" id="groceryCsv">Export CSV</button>
+          <button class="ghost" id="groceryPrint">Print list</button>
+        </div>
       </div>
       <div id="groceries"><p class="empty">Your grocery list appears here once you plan a week of meals.</p></div>
       <div class="receipt-tear" aria-hidden="true"></div>
@@ -93,6 +99,14 @@
         <label class="field">Name <input id="billName" placeholder="Electric bill"></label>
         <label class="field">Amount ($) <input id="billAmount" type="number" min="0" step="0.01" placeholder="85.00"></label>
         <label class="field">Due date <input id="billDue" type="date"></label>
+        <label class="field">Repeats
+          <select id="billRecur">
+            <option value="">One-time</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly" selected>Monthly</option>
+            <option value="yearly">Yearly</option>
+          </select>
+        </label>
         <button class="primary" id="billBtn">Add bill</button>
       </div>
     </div>

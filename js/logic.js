@@ -32,6 +32,16 @@ function fitsBudget(meal, budget) {
   return true;
 }
 
+// Quick-cook filter: only meals within maxTime minutes (0 = no limit).
+function fitsTime(meal, maxTime) {
+  if (!maxTime || maxTime <= 0) return true;
+  return (meal.timeMin || 0) <= maxTime;
+}
+
+function isoDate(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
 function seededRng(seed) {
   // mulberry32
   let a = seed >>> 0;
@@ -48,9 +58,11 @@ function generateMealPlan(prefs, recipeBank, seed) {
   prefs = prefs || {};
   const diet = prefs.diet || "any";
   const budget = prefs.budget || "medium";
+  const maxTime = prefs.maxTime || 0;
+  const excluded = new Set(prefs.excluded || []);
   const rng = seededRng(seed == null ? Date.now() % 100000 : seed);
-  const pool = recipeBank.filter(m => fitsDiet(m, diet) && fitsBudget(m, budget));
-  if (pool.length === 0) return { days: [], error: "No meals match those preferences. Try widening the diet or budget." };
+  const pool = recipeBank.filter(m => fitsDiet(m, diet) && fitsBudget(m, budget) && fitsTime(m, maxTime) && !excluded.has(m.id));
+  if (pool.length === 0) return { days: [], error: "No meals match those preferences. Try widening the diet, budget, or cook-time filter." };
   const chosen = [];
   const used = new Set();
   for (let i = 0; i < 7; i++) {
@@ -70,14 +82,23 @@ function generateMealPlan(prefs, recipeBank, seed) {
 function swapMeal(plan, dayIndex, prefs, recipeBank, seed) {
   const diet = (prefs || {}).diet || "any";
   const budget = (prefs || {}).budget || "medium";
+  const maxTime = (prefs || {}).maxTime || 0;
+  const excluded = new Set((prefs || {}).excluded || []);
   const rng = seededRng((seed == null ? 0 : seed) + dayIndex * 97 + 13);
   const onPlan = new Set(plan.days.map(d => d.meal.id));
-  const pool = recipeBank.filter(m => fitsDiet(m, diet) && fitsBudget(m, budget) && !onPlan.has(m.id));
-  const source = pool.length ? pool : recipeBank.filter(m => fitsDiet(m, diet) && fitsBudget(m, budget));
+  const pool = recipeBank.filter(m => fitsDiet(m, diet) && fitsBudget(m, budget) && fitsTime(m, maxTime) && !onPlan.has(m.id) && !excluded.has(m.id));
+  const source = pool.length ? pool : recipeBank.filter(m => fitsDiet(m, diet) && fitsBudget(m, budget) && fitsTime(m, maxTime) && !excluded.has(m.id));
   if (!source.length) return plan;
   const next = source[Math.floor(rng() * source.length)];
   const days = plan.days.map((d, i) => i === dayIndex ? { day: d.day, meal: next } : d);
   return { days };
+}
+
+// Pin a specific meal to a day of the week (survives re-plans via the app's pinned map).
+function pinMeal(plan, dayIndex, mealId, recipeBank) {
+  const meal = (recipeBank || []).find(m => m.id === mealId);
+  if (!meal || !plan || !plan.days || !plan.days[dayIndex]) return plan;
+  return { days: plan.days.map((d, i) => i === dayIndex ? { day: d.day, meal } : d) };
 }
 
 // Combine ingredient lists across the week into a grocery list.
@@ -99,6 +120,20 @@ function aggregateGroceries(plan) {
 
 function roundQty(q) { return Math.round(q * 10) / 10; }
 
+function csvCell(v) {
+  const s = String(v == null ? "" : v);
+  return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+}
+
+// Grocery list -> CSV for sharing / importing elsewhere.
+function groceriesToCSV(list) {
+  const rows = [["Item", "Quantity", "Unit", "Est. cost ($)"]];
+  (list || []).forEach(g => {
+    rows.push([g.name, roundQty(g.qty), g.unit, Number(g.estCost).toFixed(2)]);
+  });
+  return rows.map(r => r.map(csvCell).join(",")).join("\n");
+}
+
 // Plain-language nudge for a bill. now is a Date; bill has {name, dueDate: 'YYYY-MM-DD', amount}.
 function billNudge(bill, now) {
   now = now || new Date();
@@ -115,6 +150,21 @@ function billNudge(bill, now) {
 
 function fmtMoney(n) { return "$" + Number(n).toFixed(2); }
 
+// Advance a recurring bill's due date by one cycle. Returns the updated bill.
+function advanceBill(bill, cycle) {
+  const c = cycle || bill.recurring || "monthly";
+  const d = new Date(bill.dueDate + "T12:00:00");
+  if (isNaN(d.getTime())) return bill;
+  if (c === "weekly") d.setDate(d.getDate() + 7);
+  else if (c === "yearly") d.setFullYear(d.getFullYear() + 1);
+  else d.setMonth(d.getMonth() + 1); // monthly default
+  return Object.assign({}, bill, { dueDate: isoDate(d) });
+}
+
+function billCycleLabel(bill) {
+  return bill.recurring ? "every " + bill.recurring.replace("ly", "") + (bill.recurring === "monthly" ? " month" : bill.recurring === "weekly" ? " week" : " year") : "one-time";
+}
+
 // Fair weekly rotation: chores dealt round-robin to members, offset shifts each week.
 function choreRotation(members, chores, weekNumber) {
   if (!members.length || !chores.length) return [];
@@ -124,6 +174,35 @@ function choreRotation(members, chores, weekNumber) {
     member: members[(i + week) % members.length]
   }));
   return result;
+}
+
+// Chore completion tracking: who actually did what this week.
+function logChoreDone(completions, member, chore, week) {
+  const next = (completions || []).slice();
+  next.push({ member, chore, week: Math.max(0, week || 0), at: new Date().toISOString() });
+  return next;
+}
+
+// Per-member completion counts for a given week.
+function choreScores(completions, week) {
+  const scores = {};
+  (completions || []).forEach(c => {
+    if (c.week === week) scores[c.member] = (scores[c.member] || 0) + 1;
+  });
+  return scores;
+}
+
+// Plain-language fairness note from this week's completion counts.
+function fairnessNote(scores, members) {
+  const names = (members || []).filter(Boolean);
+  if (!names.length) return "";
+  const counts = names.map(n => (scores || {})[n] || 0);
+  const max = Math.max.apply(null, counts), min = Math.min.apply(null, counts);
+  if (max === 0) return "Nobody's logged a chore yet this week — first one in sets the bar.";
+  if (max === min) return "Perfectly balanced so far — " + names.join(", ") + " " + (names.length === 1 ? "has" : "have each") + " logged " + max + ".";
+  const low = names.filter(n => ((scores || {})[n] || 0) === min);
+  const high = names.filter(n => ((scores || {})[n] || 0) === max);
+  return high.join(", ") + " " + (high.length === 1 ? "has" : "have") + " done " + max + " — " + low.join(", ") + " " + (low.length === 1 ? "has" : "have") + " only " + min + ". Time to rebalance.";
 }
 
 // AI-ish suggestions: local heuristics + template library.
@@ -144,12 +223,18 @@ function suggestInsights(ctx) {
   if (ctx && ctx.choresUnassigned > 0) {
     out.push("You've got " + ctx.choresUnassigned + " chore" + (ctx.choresUnassigned === 1 ? "" : "s") + " with nobody assigned. Fair rotations keep the peace — add them on the Chores tab.");
   }
+  if (ctx && ctx.members && ctx.members.length && ctx.choreCompletions) {
+    const note = fairnessNote(choreScores(ctx.choreCompletions, ctx.choreWeek || 0), ctx.members);
+    if (note && !/Nobody's logged/.test(note)) out.push("Chore check: " + note);
+  }
   if (!out.length) out.push("All quiet. Add a bill or plan a week of meals and I'll keep an eye on things.");
   return out;
 }
 
-const api = { store, DIETS, BUDGETS, DAYS, generateMealPlan, swapMeal, aggregateGroceries,
-              roundQty, billNudge, fmtMoney, choreRotation, suggestInsights, fitsDiet, fitsBudget, seededRng };
+const api = { store, DIETS, BUDGETS, DAYS, generateMealPlan, swapMeal, pinMeal, aggregateGroceries,
+              roundQty, billNudge, fmtMoney, advanceBill, billCycleLabel, groceriesToCSV,
+              choreRotation, logChoreDone, choreScores, fairnessNote,
+              suggestInsights, fitsDiet, fitsBudget, fitsTime, seededRng };
 
 // browser global
 if (typeof window !== "undefined") window.NestLife = api;

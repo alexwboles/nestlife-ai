@@ -79,5 +79,38 @@ console.log('OK');
 " || fail "chore rotation"
 pass "chore rotation: fair assignment, shifts weekly"
 
+# 12: new feature functions are exported
+node -e "
+const NL = require('./js/logic.js');
+['fitsTime','pinMeal','advanceBill','billCycleLabel','groceriesToCSV','logChoreDone','choreScores','fairnessNote'].forEach(f => {
+  if (typeof NL[f] !== 'function') throw new Error('missing export: ' + f);
+});
+console.log('OK');
+" || fail "new feature exports"
+pass "new feature functions exported (quick-cook, pin, recurring bills, CSV, fairness)"
+
+# 13: quick-cook filter restricts meal times
+node -e "
+const NL = require('./js/logic.js');
+const R = require('./js/recipes.js');
+const plan = NL.generateMealPlan({diet:'any', maxTime:30}, R, 42);
+if (!plan.days || plan.days.length !== 7) throw new Error('plan should have 7 days');
+plan.days.forEach(d => { if (d.meal.timeMin > 30) throw new Error('over-time meal: ' + d.meal.name); });
+console.log('OK');
+" || fail "quick-cook filter"
+pass "quick-cook filter: all meals <= 30 min"
+
+# 14: grocery total renders (bug regression: receipt-total must not be wiped)
+node -e "
+const fs = require('fs');
+const src = fs.readFileSync('./js/app.js', 'utf8');
+if (!/receipt-total/.test(src)) throw new Error('no receipt-total in app.js');
+const groceries = src.split('function renderGroceries')[1].split('function renderBills')[0];
+// the old bug did 'box.innerHTML = box.innerHTML + ...' then overwrote it; that pattern must be gone
+if (/box\.innerHTML\s*=\s*box\.innerHTML/.test(groceries)) throw new Error('double-assignment bug pattern still present');
+console.log('OK');
+" || fail "grocery total render"
+pass "grocery total renders (no double innerHTML assignment)"
+
 echo ""
 echo "SMOKE: all checks passed"

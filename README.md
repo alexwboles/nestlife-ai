@@ -7,10 +7,12 @@
 ## Features (MVP)
 
 1. **Weekly meal planner** — pick diet (any / vegetarian / vegan / gluten-free) + budget + family size → a 7-day plan from a bank of 36 real recipes, with a **Swap** button on any day.
-2. **Auto grocery list** — ingredients aggregated across the week (duplicates merged, quantities summed), with check-off UI and an estimated total.
-3. **Bill reminders** — add bills with due dates; get plain-language nudges like *"Electric is due in 3 days ($85.00)"* or *"Internet is 12 days overdue — pay it today to dodge late fees."*
-4. **Chore rotation** — add family members + chores → a fair weekly rotation that shifts each week so nobody's stuck with the same chore.
-5. **Home insights** — local-heuristic "AI" suggestions: urgent bills, estimated cost-per-night for the week's plan, missing chore assignments.
+2. **Quick-cook filter** — "30-minute weeknights only" limits the plan to fast dinners.
+3. **Pinned favorites + "never suggest"** — pin a meal to a weekday so it sticks every week; banish meals you never want to see again (with a clear button).
+4. **Auto grocery list** — ingredients aggregated across the week (duplicates merged, quantities summed), with check-off UI and an estimated total (now always visible). **Export CSV** or **print** the list.
+5. **Bill reminders** — add bills with due dates and repeat cycles (one-time / weekly / monthly / yearly); get plain-language nudges like *"Electric is due in 3 days ($85.00)"* or *"Internet is 12 days overdue — pay it today to dodge late fees."* Marking a recurring bill paid rolls its due date forward automatically.
+6. **Chore rotation** — add family members + chores → a fair weekly rotation that shifts each week so nobody's stuck with the same chore. Log completions with a **Done** button and see a weekly **fairness score** ("Sam has done 3 — Jordan has only 1. Time to rebalance."), also surfaced on the Home tab.
+7. **Home insights** — local-heuristic "AI" suggestions: urgent bills, estimated cost-per-night for the week's plan, missing chore assignments, chore fairness.
 
 ## How to run
 
@@ -28,8 +30,8 @@ python3 -m http.server 8080
 ## Tests
 
 ```bash
-bash test/smoke.sh   # 11 quick checks: files, JS syntax, meal plan, groceries, bills, chores
-bash test/e2e.sh     # 6 end-to-end flows through the core logic (node)
+bash test/smoke.sh   # 14 quick checks: files, JS syntax, meal plan, groceries, bills, chores, new features
+bash test/e2e.sh     # 10 end-to-end flows through the core logic (node)
 ```
 
 ## Tech
