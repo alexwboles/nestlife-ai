@@ -232,3 +232,9 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
   .receipt { box-shadow: none; max-width: none; }
   .grocery-item input[type="checkbox"] { display: none; }
 }
+
+/* ---------- aisle groups + night-off days ---------- */
+.aisle-head{font-size:.78rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);
+  margin:1.2rem 0 .35rem;padding-bottom:.3rem;border-bottom:1px solid var(--line)}
+.aisle-head:first-child{margin-top:0}
+.meal-day.off{opacity:.85;background:#f4f1ea}

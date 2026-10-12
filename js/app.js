@@ -50,17 +50,37 @@ function renderPlan() {
     return;
   }
   const pinned = NL.store.get("pinnedMeals", {});
-  box.innerHTML = plan.days.map((d, i) =>
-    `<div class="meal-day" style="animation-delay:${Math.min(i * 40, 280)}ms">
+  box.innerHTML = plan.days.map((d, i) => {
+    if (d.off) {
+      return `<div class="meal-day off" style="animation-delay:${Math.min(i * 40, 280)}ms">
+       <div class="day">${d.day}</div>
+       <div class="meal">Night off<small>leftovers · takeout · eating out</small></div>
+       <div class="row btnrow" style="margin:0;gap:.4rem">
+         <button class="ghost" data-nightoff="${i}">Plan a meal</button>
+       </div>
+     </div>`;
+    }
+    return `<div class="meal-day" style="animation-delay:${Math.min(i * 40, 280)}ms">
        <div class="day">${d.day}</div>
        <div class="meal">${esc(d.meal.name)}<small>${d.meal.timeMin} min · ~${NL.fmtMoney(d.meal.costPerServing)}/serving</small></div>
        <div class="row btnrow" style="margin:0;gap:.4rem">
          <button class="ghost" data-swap="${i}">Swap</button>
          <button class="ghost" data-pin="${i}" title="Keep this meal on ${d.day} every week">${pinned[i] === d.meal.id ? "Pinned ✓" : "Pin"}</button>
+         <button class="ghost" data-nightoff="${i}" title="Mark as a night off — excluded from the grocery list">Night off</button>
          <button class="ghost danger" data-dislike="${d.meal.id}" title="Never suggest this meal again">Never suggest</button>
        </div>
-     </div>`
-  ).join("");
+     </div>`;
+  }).join("");
+  box.querySelectorAll("[data-nightoff]").forEach(b => b.addEventListener("click", () => {
+    const plan = NL.store.get("plan");
+    const i = parseInt(b.dataset.nightoff, 10);
+    plan.days[i] = plan.days[i].off
+      ? { day: plan.days[i].day, meal: plan.days[i].meal }
+      : { day: plan.days[i].day, meal: plan.days[i].meal, off: true };
+    NL.store.set("plan", plan);
+    NL.store.set("groceryChecked", {});
+    renderPlan(); renderGroceries(); renderInsights();
+  }));
   box.querySelectorAll("[data-swap]").forEach(b => b.addEventListener("click", () => {
     const plan = NL.store.get("plan");
     const prefs = currentPrefs();
@@ -126,9 +146,14 @@ function planWeek() {
   const prefs = { diet: $("#diet").value, budget: $("#budget").value, people: parseInt($("#people").value, 10) || 4,
                   maxTime: $("#quickCook").checked ? 30 : 0 };
   NL.store.set("prefs", prefs);
+  const prevPlan = NL.store.get("plan", null);
   let plan = NL.generateMealPlan(Object.assign({}, prefs, { excluded: NL.store.get("disliked", []) }), R);
   if (plan.error) { $("#plan").innerHTML = `<p class="empty">${esc(plan.error)}</p>`; return; }
   plan = applyPins(plan);
+  // keep "night off" days across re-plans
+  if (prevPlan && prevPlan.days && prevPlan.days.length === plan.days.length) {
+    plan.days = plan.days.map((d, i) => prevPlan.days[i] && prevPlan.days[i].off ? Object.assign({}, d, { off: true }) : d);
+  }
   NL.store.set("plan", plan);
   NL.store.set("groceryChecked", {});
   renderPlan(); renderGroceries(); renderInsights();
@@ -145,16 +170,20 @@ function renderGroceries() {
   }
   const list = NL.aggregateGroceries(plan);
   const total = list.reduce((s, i) => s + i.estCost, 0);
-  $("#groceryTotal").textContent = `${list.length} items · built from your meal plan`;
-  box.innerHTML = list.map((g, i) => {
-    const key = (g.name + "|" + g.unit).toLowerCase();
-    const isChecked = !!checked[key];
-    return `<label class="grocery-item${isChecked ? " checked" : ""}">
+  const offDays = plan.days.filter(d => d.off).length;
+  $("#groceryTotal").textContent = `${list.length} items · built from your meal plan` + (offDays ? ` (${offDays} night${offDays === 1 ? "" : "s"} off)` : "");
+  const sections = NL.groupGroceriesByAisle(list);
+  box.innerHTML = sections.map(sec =>
+    `<h3 class="aisle-head">${esc(sec.aisle)}</h3>` + sec.items.map(g => {
+      const key = (g.name + "|" + g.unit).toLowerCase();
+      const isChecked = !!checked[key];
+      return `<label class="grocery-item${isChecked ? " checked" : ""}">
       <input type="checkbox" data-g="${esc(key)}"${isChecked ? " checked" : ""}>
       <span class="gname">${esc(g.name)}</span>
       <span class="gqty">${NL.roundQty(g.qty)} ${esc(g.unit)} · ${NL.fmtMoney(g.estCost)}</span>
     </label>`;
-  }).join("") +
+    }).join("")
+  ).join("") +
   `<div class="receipt-total"><span>Estimated total</span><span>${NL.fmtMoney(total)}</span></div>`;
   box.querySelectorAll("[data-g]").forEach(c => c.addEventListener("change", () => {
     const ck = NL.store.get("groceryChecked", {});

@@ -102,13 +102,15 @@ function pinMeal(plan, dayIndex, mealId, recipeBank) {
 }
 
 // Combine ingredient lists across the week into a grocery list.
+// Days marked `off` (night off / eating out) contribute nothing.
 function aggregateGroceries(plan) {
   const map = new Map();
-  plan.days.forEach(d => {
-    d.meal.ingredients.forEach(ing => {
+  (plan.days || []).forEach(d => {
+    if (d.off) return;
+    (d.meal.ingredients || []).forEach(ing => {
       const key = (ing.name + "|" + ing.unit).toLowerCase();
       if (!map.has(key)) {
-        map.set(key, { name: ing.name, unit: ing.unit, qty: 0, estCost: 0, checked: false });
+        map.set(key, { name: ing.name, unit: ing.unit, qty: 0, estCost: 0, checked: false, aisle: aisleFor(ing.name) });
       }
       const e = map.get(key);
       e.qty += ing.qty;
@@ -120,6 +122,78 @@ function aggregateGroceries(plan) {
 
 function roundQty(q) { return Math.round(q * 10) / 10; }
 
+// ---------- Grocery aisles ----------
+// Store-section grouping so the list is shoppable in aisle order.
+const AISLES = ["Produce", "Dairy & eggs", "Meat & seafood", "Bakery", "Frozen", "Pantry", "Household", "Other"];
+
+const AISLE_KEYWORDS = [
+  ["Produce", ["apple", "banana", "orange", "lemon", "lime", "tomato", "lettuce", "salad", "onion", "garlic",
+    "potato", "carrot", "pepper", "cucumber", "spinach", "kale", "broccoli", "cauliflower", "mushroom", "avocado",
+    "berry", "berries", "strawberry", "blueberry", "grape", "melon", "peach", "pear", "plum", "cherry",
+    "herb", "basil", "cilantro", "parsley", "ginger", "cabbage", "celery", "zucchini", "squash", "corn",
+    "asparagus", "green bean", "pea ", "bean sprout", "lime juice", "lemon juice"]],
+  ["Dairy & eggs", ["milk", "cheese", "butter", "yogurt", "cream", "sour cream", "cottage cheese", "parmesan",
+    "mozzarella", "cheddar", "feta", "ricotta", "egg", "kefir", "buttermilk", "half-and-half", "whipped"]],
+  ["Meat & seafood", ["chicken", "beef", "pork", "turkey", "bacon", "sausage", "salmon", "tuna", "shrimp", "fish",
+    "cod", "tilapia", "steak", "ham", "ground meat", "ground turkey", "ground beef", "pork chop", "meatball",
+    "pepperoni", "tofu", "tempeh", "duck", "lamb"]],
+  ["Bakery", ["bread", "bun", "roll", "tortilla", "bagel", "pita", "croissant", "muffin", "english muffin",
+    "pizza dough", "pie crust", "baguette", "ciabatta"]],
+  ["Frozen", ["frozen", "ice cream", "popsicle"]],
+  ["Household", ["paper towel", "napkin", "tissue", "soap", "detergent", "cleaner", "sponge", "trash bag",
+    "foil", "plastic wrap", "parchment", "ziploc", "bag"]]
+];
+
+function aisleFor(name) {
+  const n = String(name || "").toLowerCase();
+  for (const [aisle, words] of AISLE_KEYWORDS) {
+    for (const w of words) {
+      if (n.indexOf(w) !== -1) return aisle;
+    }
+  }
+  // pantry staples default to Pantry; anything truly unknown goes to Other
+  if (/rice|pasta|flour|sugar|salt|oil|vinegar|sauce|spice|seasoning|canned|can of|bean|lentil|oat|cereal|honey|syrup|stock|broth|noodle|quinoa|couscous|nut|seed|chocolate|cocoa|coffee|tea|jam|peanut butter|ketchup|mustard|mayo|salsa/.test(n)) return "Pantry";
+  return "Other";
+}
+
+// Group a grocery list (from aggregateGroceries) into aisle sections, in store order.
+function groupGroceriesByAisle(list) {
+  const buckets = {};
+  AISLES.forEach(a => { buckets[a] = []; });
+  (list || []).forEach(g => {
+    const a = aisleFor(g.name);
+    buckets[a].push(g);
+  });
+  return AISLES.filter(a => buckets[a].length).map(a => ({ aisle: a, items: buckets[a] }));
+}
+
+// ---------- Bill spending forecast ----------
+// Total due within `days` from `now` (includes overdue bills — they're due now too).
+function upcomingBillTotal(bills, days, now) {
+  now = now || new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let total = 0, count = 0;
+  (bills || []).forEach(b => {
+    const due = new Date(b.dueDate + "T12:00:00");
+    if (isNaN(due.getTime())) return;
+    const diff = Math.round((new Date(due.getFullYear(), due.getMonth(), due.getDate()) - today) / 86400000);
+    if (diff <= days) { total += Number(b.amount) || 0; count++; }
+  });
+  return { total: Math.round(total * 100) / 100, count, days };
+}
+
+// Rough monthly burn of recurring bills (weekly -> *52/12, yearly -> /12). One-time bills ignored.
+function monthlyRecurringTotal(bills) {
+  let total = 0;
+  (bills || []).forEach(b => {
+    const a = Number(b.amount) || 0;
+    if (b.recurring === "weekly") total += a * 52 / 12;
+    else if (b.recurring === "yearly") total += a / 12;
+    else if (b.recurring === "monthly") total += a;
+  });
+  return Math.round(total * 100) / 100;
+}
+
 function csvCell(v) {
   const s = String(v == null ? "" : v);
   return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
@@ -127,9 +201,9 @@ function csvCell(v) {
 
 // Grocery list -> CSV for sharing / importing elsewhere.
 function groceriesToCSV(list) {
-  const rows = [["Item", "Quantity", "Unit", "Est. cost ($)"]];
+  const rows = [["Item", "Quantity", "Unit", "Est. cost ($)", "Aisle"]];
   (list || []).forEach(g => {
-    rows.push([g.name, roundQty(g.qty), g.unit, Number(g.estCost).toFixed(2)]);
+    rows.push([g.name, roundQty(g.qty), g.unit, Number(g.estCost).toFixed(2), g.aisle || aisleFor(g.name)]);
   });
   return rows.map(r => r.map(csvCell).join(",")).join("\n");
 }
@@ -217,8 +291,22 @@ function suggestInsights(ctx) {
     if (urgent.length) out.push("Heads up: " + urgent.length + " bill" + (urgent.length === 1 ? " is" : "s are") + " due within 3 days. Knock those out before the weekend.");
   }
   if (ctx && ctx.plan && ctx.plan.days && ctx.plan.days.length === 7) {
-    const est = ctx.plan.days.reduce((s, d) => s + (d.meal.costPerServing || 0) * (ctx.people || 4), 0);
-    out.push("This week's dinners should run about " + fmtMoney(est) + " for a family of " + (ctx.people || 4) + " — roughly " + fmtMoney(est / 7) + " a night.");
+    const onDays = ctx.plan.days.filter(d => !d.off);
+    if (onDays.length) {
+      const est = onDays.reduce((s, d) => s + (d.meal.costPerServing || 0) * (ctx.people || 4), 0);
+      const offN = 7 - onDays.length;
+      out.push("This week's dinners should run about " + fmtMoney(est) + " for a family of " + (ctx.people || 4) +
+        " — roughly " + fmtMoney(est / 7) + " a night" + (offN ? " (" + offN + " night" + (offN === 1 ? "" : "s") + " off)" : "") + ".");
+    }
+  }
+  if (ctx && ctx.bills && ctx.bills.length) {
+    const upcoming = upcomingBillTotal(ctx.bills, 7, ctx.now);
+    if (upcoming.count) {
+      out.push("Money out the door: " + fmtMoney(upcoming.total) + " due in the next 7 days across " +
+        upcoming.count + " bill" + (upcoming.count === 1 ? "" : "s") + " — make sure it's covered.");
+    }
+    const monthly = monthlyRecurringTotal(ctx.bills);
+    if (monthly > 0) out.push("Your recurring bills run about " + fmtMoney(monthly) + " a month.");
   }
   if (ctx && ctx.choresUnassigned > 0) {
     out.push("You've got " + ctx.choresUnassigned + " chore" + (ctx.choresUnassigned === 1 ? "" : "s") + " with nobody assigned. Fair rotations keep the peace — add them on the Chores tab.");
@@ -234,7 +322,9 @@ function suggestInsights(ctx) {
 const api = { store, DIETS, BUDGETS, DAYS, generateMealPlan, swapMeal, pinMeal, aggregateGroceries,
               roundQty, billNudge, fmtMoney, advanceBill, billCycleLabel, groceriesToCSV,
               choreRotation, logChoreDone, choreScores, fairnessNote,
-              suggestInsights, fitsDiet, fitsBudget, fitsTime, seededRng };
+              suggestInsights, fitsDiet, fitsBudget, fitsTime, seededRng,
+              AISLES, aisleFor, groupGroceriesByAisle,
+              upcomingBillTotal, monthlyRecurringTotal };
 
 // browser global
 if (typeof window !== "undefined") window.NestLife = api;

@@ -127,12 +127,13 @@ flow("grocery CSV export flow", () => {
   const list = NL.aggregateGroceries(plan);
   const csv = NL.groceriesToCSV(list);
   const rows = csv.split("\n");
-  assert.strictEqual(rows[0], "Item,Quantity,Unit,Est. cost ($)", "header wrong: " + rows[0]);
+  assert.strictEqual(rows[0], "Item,Quantity,Unit,Est. cost ($),Aisle", "header wrong: " + rows[0]);
   assert.strictEqual(rows.length, list.length + 1, "row count mismatch");
   rows.slice(1).forEach(r => {
     const parts = r.split(",");
-    assert.ok(parts.length >= 4, "row has too few columns: " + r);
+    assert.ok(parts.length >= 5, "row has too few columns: " + r);
     assert.ok(!isNaN(parseFloat(parts[3])), "cost not numeric: " + r);
+    assert.ok(parts[4].length > 0, "aisle missing: " + r);
   });
 });
 
@@ -153,6 +154,69 @@ flow("chore completion + fairness flow", () => {
   const insights = NL.suggestInsights({ bills: [], plan: null, people: 4, choresUnassigned: 0,
     members: ["Sam", "Jordan"], choreCompletions: c, choreWeek: 0 });
   assert.ok(insights.some(i => /Chore check/.test(i)), "fairness insight missing: " + insights.join(" | "));
+});
+
+// (flows 11-13 appended below)
+
+
+flow("grocery aisle grouping flow", () => {
+  const plan = NL.generateMealPlan({ diet: "any" }, R, 7);
+  const list = NL.aggregateGroceries(plan);
+  const secs = NL.groupGroceriesByAisle(list);
+  assert.ok(secs.length >= 3, "expected several aisles, got " + secs.length);
+  // aisle order follows the store's walk, not alphabetical
+  const order = secs.map(s => s.aisle);
+  const firsts = ["Produce", "Dairy & eggs", "Meat & seafood"].filter(a => order.includes(a));
+  assert.ok(firsts.length, "fresh aisles should lead when present");
+  const total = secs.reduce((s, x) => s + x.items.length, 0);
+  assert.strictEqual(total, list.length, "no items lost in grouping");
+  // keyword sanity
+  assert.strictEqual(NL.aisleFor("whole milk"), "Dairy & eggs");
+  assert.strictEqual(NL.aisleFor("chicken breast"), "Meat & seafood");
+  assert.strictEqual(NL.aisleFor("sourdough bread"), "Bakery");
+  assert.strictEqual(NL.aisleFor("jasmine rice"), "Pantry");
+  assert.strictEqual(NL.aisleFor("paper towels"), "Household");
+  assert.strictEqual(NL.aisleFor("frozen peas"), "Frozen");
+  assert.strictEqual(NL.aisleFor("xyz mystery"), "Other");
+  // every aggregated item carries its aisle
+  assert.ok(list.every(g => typeof g.aisle === "string" && g.aisle.length), "items must carry aisle");
+});
+
+// Flow 12: night-off days drop out of the grocery list and cost estimate
+flow("night-off days flow", () => {
+  const plan = NL.generateMealPlan({ diet: "any" }, R, 21);
+  const full = NL.aggregateGroceries(plan);
+  const offPlan = { days: plan.days.map((d, i) => i === 2 || i === 5 ? Object.assign({}, d, { off: true }) : d) };
+  const lite = NL.aggregateGroceries(offPlan);
+  assert.ok(lite.length < full.length, "off days should shrink the list");
+  const totalFull = full.reduce((s, i) => s + i.estCost, 0);
+  const totalLite = lite.reduce((s, i) => s + i.estCost, 0);
+  assert.ok(totalLite < totalFull, "off days should lower the estimate");
+  // insights mention the nights off instead of pricing them
+  const insights = NL.suggestInsights({ bills: [], plan: offPlan, people: 4, choresUnassigned: 0 });
+  assert.ok(insights.some(i => /2 nights off/.test(i)), "insight should note nights off: " + insights.join(" | "));
+});
+
+// Flow 13: bill spending forecast — next-7-day total + monthly recurring burn
+flow("bill forecast flow", () => {
+  const now = new Date("2026-09-27T12:00:00");
+  const bills = [
+    { name: "Rent", dueDate: "2026-10-01", amount: 1500, recurring: "monthly" },
+    { name: "Electric", dueDate: "2026-09-29", amount: 85.5, recurring: "monthly" },
+    { name: "Internet", dueDate: "2026-09-15", amount: 60, recurring: "monthly" }, // overdue — still due
+    { name: "Insurance", dueDate: "2026-10-20", amount: 400 }, // one-time, outside the window
+    { name: "Cleaner", dueDate: "2026-09-30", amount: 40, recurring: "weekly" }
+  ];
+  const up = NL.upcomingBillTotal(bills, 7, now);
+  assert.strictEqual(up.count, 4, "Rent+Electric+Internet+Cleaner in window, got " + up.count);
+  assert.strictEqual(up.total, 1685.5, "upcoming total wrong: " + up.total);
+  const monthly = NL.monthlyRecurringTotal(bills);
+  const want = Math.round((1500 + 85.5 + 60 + 40 * 52 / 12) * 100) / 100;
+  assert.strictEqual(monthly, want, "monthly recurring wrong: " + monthly);
+  // insights surface both
+  const insights = NL.suggestInsights({ bills, plan: null, people: 4, choresUnassigned: 0, now });
+  assert.ok(insights.some(i => /\$1,?685\.50/.test(i) && /next 7 days/.test(i)), "7-day spend insight missing: " + insights.join(" | "));
+  assert.ok(insights.some(i => /recurring bills/.test(i)), "recurring-burn insight missing: " + insights.join(" | "));
 });
 
 console.log("\nE2E: " + passed + " flows passed" + (process.exitCode ? " (with failures)" : ""));
