@@ -261,4 +261,23 @@ flow("variety guard flow", () => {
   assert.strictEqual(overlap.length, 0, "plan repeats last week's meals: " + overlap);
 });
 
+// Flow 17: family calendar — add events, 14-day agenda, member tags, remove
+flow("family calendar flow", () => {
+  let evs = [];
+  evs = NL.addFamilyEvent(evs, { title: "Dentist", date: "2026-10-15", member: "Maya" });
+  evs = NL.addFamilyEvent(evs, { title: "Soccer", date: "2026-10-14", member: "Sam" });
+  evs = NL.addFamilyEvent(evs, { title: "Whole-family BBQ", date: "2026-10-18", member: "" });
+  const up = NL.upcomingEvents(evs, 14, "2026-10-13");
+  assert.strictEqual(up.length, 3, "3 upcoming, got " + up.length);
+  assert.deepStrictEqual(up.map(e => e.title), ["Soccer", "Dentist", "Whole-family BBQ"], "agenda order wrong");
+  assert.strictEqual(up[2].daysOut, 5, "daysOut wrong: " + up[2].daysOut);
+  assert.strictEqual(up[2].member, "", "whole-family member should be empty");
+  // removing one drops it from the agenda
+  evs = NL.removeFamilyEvent(evs, evs[1].id);
+  assert.strictEqual(NL.upcomingEvents(evs, 14, "2026-10-13").length, 2, "remove did not drop event");
+  // events beyond the window stay out
+  evs = NL.addFamilyEvent(evs, { title: "Christmas", date: "2026-12-25" });
+  assert.strictEqual(NL.upcomingEvents(evs, 14, "2026-10-13").length, 2, "window leak");
+});
+
 console.log("\nE2E: " + passed + " flows passed" + (process.exitCode ? " (with failures)" : ""));

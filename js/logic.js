@@ -391,6 +391,36 @@ function suggestInsights(ctx) {
   return out;
 }
 
+/* ---------- Family calendar ---------- */
+function addFamilyEvent(events, e) {
+  const title = String((e && e.title) || "").trim();
+  const date = String((e && e.date) || "");
+  if (!title) throw new Error("Give the event a title.");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date + "T12:00:00").getTime()))
+    throw new Error("Pick a valid date.");
+  const out = (events || []).slice();
+  out.push({ id: "e" + Date.now().toString(36) + out.length.toString(36),
+             title, date, member: String((e && e.member) || "").trim() });
+  return out;
+}
+function removeFamilyEvent(events, id) { return (events || []).filter(e => e.id !== id); }
+function addDaysISO(iso, n) {
+  const d = new Date(iso + "T12:00:00");
+  d.setDate(d.getDate() + n);
+  return isoDate(d);
+}
+function upcomingEvents(events, days, todayStr) {
+  const n = Math.max(1, parseInt(days, 10) || 14);
+  const end = addDaysISO(todayStr, n);
+  const now = new Date(todayStr + "T12:00:00").getTime();
+  return (events || [])
+    .filter(e => e.date >= todayStr && e.date <= end)
+    .sort((a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title))
+    .map(e => Object.assign({}, e, {
+      daysOut: Math.round((new Date(e.date + "T12:00:00").getTime() - now) / 86400000)
+    }));
+}
+
 const api = { store, DIETS, BUDGETS, DAYS, generateMealPlan, swapMeal, pinMeal, aggregateGroceries,
               roundQty, billNudge, fmtMoney, advanceBill, billCycleLabel, groceriesToCSV,
               choreRotation, logChoreDone, choreScores, fairnessNote,
@@ -399,7 +429,8 @@ const api = { store, DIETS, BUDGETS, DAYS, generateMealPlan, swapMeal, pinMeal, 
               upcomingBillTotal, monthlyRecurringTotal,
               ownedKey, toBuyTotal, toggleOwned,
               logBillPaid, paidThisMonth,
-              recordServedWeek, recentMealIds };
+              recordServedWeek, recentMealIds,
+              addFamilyEvent, removeFamilyEvent, upcomingEvents };
 
 // browser global
 if (typeof window !== "undefined") window.NestLife = api;

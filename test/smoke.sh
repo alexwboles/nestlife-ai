@@ -130,5 +130,31 @@ console.log('OK');
 " || fail "grocery total render"
 pass "grocery total renders (no double innerHTML assignment)"
 
+# calendar feature
+for needle in addFamilyEvent removeFamilyEvent upcomingEvents renderCalendar renderGlance evAdd evMember agenda glance; do
+  grep -q "$needle" js/app.js js/logic.js index.html || fail "missing $needle"
+done
+grep -q 'data-tab="calendar"' index.html || fail "index.html missing calendar tab"
+grep -q 'glance-grid' css/style.css || fail "glance CSS missing"
+grep -q 'agenda-day' css/style.css || fail "agenda CSS missing"
+node -e "
+const NL = require('./js/logic.js');
+let evs = [];
+evs = NL.addFamilyEvent(evs, { title: 'Dentist', date: '2026-10-15', member: 'Maya' });
+evs = NL.addFamilyEvent(evs, { title: 'Party', date: '2026-10-13' });
+evs = NL.addFamilyEvent(evs, { title: 'Old', date: '2026-10-01' });
+evs = NL.addFamilyEvent(evs, { title: 'Far', date: '2026-12-01' });
+const up = NL.upcomingEvents(evs, 14, '2026-10-13');
+if (up.length !== 2) throw new Error('upcoming=' + up.length);
+if (up[0].title !== 'Party' || up[0].daysOut !== 0) throw new Error('today event first');
+if (up[1].title !== 'Dentist' || up[1].daysOut !== 2 || up[1].member !== 'Maya') throw new Error('dentist wrong');
+if (NL.removeFamilyEvent(evs, evs[0].id).length !== 3) throw new Error('remove failed');
+let threw = 0;
+try { NL.addFamilyEvent([], { title: '', date: '2026-10-15' }); } catch (e) { threw++; }
+try { NL.addFamilyEvent([], { title: 'X', date: 'nope' }); } catch (e) { threw++; }
+if (threw !== 2) throw new Error('validation missing');
+" || fail "calendar logic checks"
+pass "calendar feature: tab, agenda, glance, logic"
+
 echo ""
 echo "SMOKE: all checks passed"

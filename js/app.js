@@ -249,7 +249,7 @@ function renderBills() {
       bills = bills.filter(x => x.id !== b.id);
     }
     NL.store.set("bills", bills);
-    renderBills(); renderPaidHistory(); renderInsights();
+    renderBills(); renderPaidHistory(); renderGlance(); renderInsights();
   }));
   box.querySelectorAll("[data-delbill]").forEach(btn => btn.addEventListener("click", () => {
     NL.store.set("bills", NL.store.get("bills", []).filter(b => b.id !== btn.dataset.delbill));
@@ -332,7 +332,74 @@ function renderRotation() {
     const r = rows[parseInt(b.dataset.choredone, 10)];
     const next = NL.logChoreDone(NL.store.get("choreCompletions", []), r.member, r.chore, week);
     NL.store.set("choreCompletions", next);
-    renderRotation(); renderInsights();
+    renderRotation(); renderGlance(); renderInsights();
+  }));
+}
+
+/* ---------- Today at a glance ---------- */
+function todayISO() {
+  const d = new Date();
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
+function renderGlance() {
+  const box = $("#glance");
+  if (!box) return;
+  const today = todayISO();
+  const plan = NL.store.get("plan", null);
+  const dayIdx = (new Date().getDay() + 6) % 7; // Monday-first
+  let dinner = "No plan yet";
+  if (plan && plan.days && plan.days[dayIdx]) {
+    const d = plan.days[dayIdx];
+    dinner = d.off ? "Night off" : (d.meal ? d.meal.name : "No plan yet");
+  }
+  const bills = NL.store.get("bills", []);
+  const dueSoon = bills.filter(b => {
+    const diff = Math.round((new Date(b.dueDate + "T12:00:00") - new Date(today + "T12:00:00")) / 86400000);
+    return diff >= 0 && diff <= 3;
+  });
+  const up = NL.upcomingEvents(NL.store.get("events", []), 14, today);
+  const next = up[0];
+  const week = NL.store.get("choreWeek", 0);
+  const doneN = NL.store.get("choreCompletions", []).filter(c => c.week === week).length;
+  const chips = [
+    ["Tonight's dinner", dinner],
+    ["Bills due \u2264 3 days", dueSoon.length ? dueSoon.length + " \u2014 " + dueSoon.slice(0, 2).map(b => b.name).join(", ") + (dueSoon.length > 2 ? ", \u2026" : "") : "none"],
+    ["Next up", next ? next.title + " (" + (next.daysOut === 0 ? "today" : next.daysOut === 1 ? "tomorrow" : "in " + next.daysOut + " days") + ")" : "nothing scheduled"],
+    ["Chores done this week", String(doneN)]
+  ];
+  box.innerHTML = chips.map(g => `<div class="glance-chip"><span class="gl-lbl">${g[0]}</span><span class="gl-val">${esc(g[1])}</span></div>`).join("");
+}
+
+/* ---------- Family calendar ---------- */
+function renderCalendar() {
+  const members = NL.store.get("members", []);
+  const sel = $("#evMember");
+  if (sel) {
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Whole family</option>' + members.map(m => `<option>${esc(m)}</option>`).join("");
+    if (members.includes(cur)) sel.value = cur;
+  }
+  const box = $("#agenda");
+  if (!box) return;
+  const today = todayISO();
+  const up = NL.upcomingEvents(NL.store.get("events", []), 14, today);
+  if (!up.length) { box.innerHTML = `<p class="empty">Nothing on the calendar \u2014 add the first event above.</p>`; return; }
+  const groups = {};
+  up.forEach(e => { (groups[e.date] = groups[e.date] || []).push(e); });
+  box.innerHTML = Object.keys(groups).sort().map(date => {
+    const when = groups[date][0].daysOut === 0 ? "Today"
+      : groups[date][0].daysOut === 1 ? "Tomorrow"
+      : new Date(date + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric" });
+    return `<div class="agenda-day"><div class="agenda-date"><b>${esc(when)}</b><span>${esc(date)}</span></div><div class="agenda-events">` +
+      groups[date].map(e => `<div class="ev-row"><span class="ev-title">${esc(e.title)}</span>` +
+        (e.member ? `<span class="pill ok">${esc(e.member)}</span>` : "") +
+        `<button class="ghost danger tiny" data-delev="${e.id}">remove</button></div>`).join("") +
+      `</div></div>`;
+  }).join("");
+  box.querySelectorAll("[data-delev]").forEach(b => b.addEventListener("click", () => {
+    NL.store.set("events", NL.removeFamilyEvent(NL.store.get("events", []), b.dataset.delev));
+    renderCalendar(); renderGlance(); renderInsights();
   }));
 }
 
@@ -347,7 +414,15 @@ document.addEventListener("DOMContentLoaded", () => {
   $("#memberBtn").addEventListener("click", () => {
     const v = $("#memberName").value.trim(); if (!v) return;
     const m = NL.store.get("members", []); m.push(v); NL.store.set("members", m);
-    $("#memberName").value = ""; renderFamily(); renderRotation(); renderInsights();
+    $("#memberName").value = ""; renderFamily(); renderRotation(); renderCalendar(); renderInsights();
+  });
+  $("#evAdd").addEventListener("click", () => {
+    try {
+      NL.store.set("events", NL.addFamilyEvent(NL.store.get("events", []),
+        { title: $("#evTitle").value, date: $("#evDate").value, member: $("#evMember").value }));
+      $("#evTitle").value = ""; $("#evDate").value = "";
+      renderCalendar(); renderGlance(); renderInsights();
+    } catch (err) { alert(err.message); }
   });
   $("#choreBtn").addEventListener("click", () => {
     const v = $("#choreName").value.trim(); if (!v) return;
@@ -360,7 +435,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#resetBtn").addEventListener("click", () => {
     if (confirm("Clear all NestLife data on this device?")) {
-      ["prefs","plan","groceryChecked","bills","members","chores","choreWeek","disliked","pinnedMeals","choreCompletions","pantryOwned","paidBills","mealHistory"].forEach(k => NL.store.del(k));
+      ["prefs","plan","groceryChecked","bills","members","chores","choreWeek","disliked","pinnedMeals","choreCompletions","pantryOwned","paidBills","mealHistory","events"].forEach(k => NL.store.del(k));
       location.reload();
     }
   });
@@ -377,7 +452,7 @@ document.addEventListener("DOMContentLoaded", () => {
     downloadCsv("nestlife-groceries.csv", NL.groceriesToCSV(NL.aggregateGroceries(plan)));
   });
   $("#groceryPrint").addEventListener("click", () => window.print());
-  renderPrefs(); renderPlan(); renderGroceries(); renderBills(); renderPaidHistory(); renderFamily(); renderChores(); renderRotation(); renderInsights();
+  renderPrefs(); renderPlan(); renderGroceries(); renderBills(); renderPaidHistory(); renderFamily(); renderChores(); renderRotation(); renderCalendar(); renderGlance(); renderInsights();
   setTab("home");
 });
 })();

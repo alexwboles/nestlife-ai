@@ -23,6 +23,7 @@
     <button data-tab="groceries">Groceries</button>
     <button data-tab="bills">Bills</button>
     <button data-tab="chores">Chores</button>
+    <button data-tab="calendar">Calendar</button>
   </nav>
 </header>
 
@@ -34,9 +35,9 @@
     </div>
     <div id="insights" class="insight-grid"></div>
     <div class="card week-card">
-      <h3>Your week at a glance</h3>
-      <p class="sub">Plan meals, check groceries, stay ahead of bills — tap a tab above to get started.</p>
-      <div class="row">
+      <h3>Today at a glance</h3>
+      <div id="glance" class="glance-grid"></div>
+      <div class="row" style="margin-top:.8rem">
         <button class="ghost danger" id="resetBtn">Reset all my data</button>
       </div>
     </div>
@@ -136,6 +137,22 @@
       <h3>All chores</h3>
       <div id="choreList"><p class="empty">No chores yet.</p></div>
     </div>
+  </section>
+  <section class="tab" data-tab="calendar" hidden>
+    <div class="board-head">
+      <h2>Family calendar</h2>
+      <p class="sub">One shared agenda — birthdays, appointments, school nights.</p>
+    </div>
+    <div class="card">
+      <div class="pref-row">
+        <label class="field">Event <input id="evTitle" placeholder="Dentist appointment" maxlength="80"></label>
+        <label class="field">Date <input id="evDate" type="date"></label>
+        <label class="field">Who <select id="evMember"><option value="">Whole family</option></select></label>
+        <button class="primary" id="evAdd">Add event</button>
+      </div>
+    </div>
+    <h2 class="section-title">Coming up — next 14 days</h2>
+    <div id="agenda"></div>
   </section>
 </main>
 
