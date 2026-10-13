@@ -219,4 +219,46 @@ flow("bill forecast flow", () => {
   assert.ok(insights.some(i => /recurring bills/.test(i)), "recurring-burn insight missing: " + insights.join(" | "));
 });
 
+// Flow 14: pantry "have it" — owned items drop out of the to-buy total
+flow("pantry have-it flow", () => {
+  let owned = NL.toggleOwned({}, "Soy Sauce");
+  assert.deepStrictEqual(owned, { "soy sauce": true }, "toggle on");
+  owned = NL.toggleOwned(owned, "SOY SAUCE");
+  assert.deepStrictEqual(owned, {}, "toggle off (case-insensitive)");
+  owned = NL.toggleOwned({}, "Rice");
+  const list = [{ name: "Rice", estCost: 3.0 }, { name: "Chicken breast", estCost: 6.6 }];
+  assert.strictEqual(NL.toBuyTotal(list, owned), 6.6, "owned rice excluded from to-buy");
+  assert.strictEqual(NL.toBuyTotal(list, {}), 9.6, "no owned -> full total");
+});
+
+// Flow 15: paid-bill history — mark-paid logs, month-to-date total + insight
+flow("paid-bill history flow", () => {
+  const oct = new Date("2026-10-13T12:00:00");
+  let h = NL.logBillPaid([], { name: "Electric", amount: 85, recurring: "monthly" }, new Date("2026-10-05T12:00:00"));
+  h = NL.logBillPaid(h, { name: "Water", amount: 40 }, new Date("2026-10-06T12:00:00"));
+  h = NL.logBillPaid(h, { name: "September rent", amount: 1500 }, new Date("2026-09-01T12:00:00"));
+  const m = NL.paidThisMonth(h, oct);
+  assert.strictEqual(m.total, 125, "October paid total wrong: " + m.total);
+  assert.strictEqual(m.count, 2, "October paid count wrong");
+  const insights = NL.suggestInsights({ bills: [], plan: null, people: 4, choresUnassigned: 0, paidMonth: m });
+  assert.ok(insights.some(i => /Paid \$125\.00/.test(i) && /so far this month/.test(i)), "paid-month insight missing: " + insights.join(" | "));
+});
+
+// Flow 16: meal variety guard — last week's meals skipped on re-plan
+flow("variety guard flow", () => {
+  let hist = NL.recordServedWeek([], [1, 2, 3], new Date("2026-10-06T12:00:00"));
+  hist = NL.recordServedWeek(hist, [4, 5, 6], new Date("2026-10-13T12:00:00"));
+  const recent = NL.recentMealIds(hist, 1);
+  assert.deepStrictEqual(recent.sort((a, b) => a - b), [4, 5, 6], "recent ids wrong: " + recent);
+  assert.strictEqual(NL.recentMealIds(hist, 0).length, 0, "weeksBack 0 -> empty");
+  // same-day record replaces instead of duplicating
+  hist = NL.recordServedWeek(hist, [7, 8], new Date("2026-10-13T18:00:00"));
+  assert.strictEqual(hist.length, 2, "same-day record should replace");
+  // a fresh plan excludes last week's meals (deterministic seeds)
+  const plan = NL.generateMealPlan({ excluded: recent }, R, 4242);
+  const ids = plan.days.map(d => d.meal.id);
+  const overlap = ids.filter(id => recent.includes(id));
+  assert.strictEqual(overlap.length, 0, "plan repeats last week's meals: " + overlap);
+});
+
 console.log("\nE2E: " + passed + " flows passed" + (process.exitCode ? " (with failures)" : ""));

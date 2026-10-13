@@ -238,3 +238,12 @@ input[type="checkbox"] { width: 20px; height: 20px; accent-color: var(--accent);
   margin:1.2rem 0 .35rem;padding-bottom:.3rem;border-bottom:1px solid var(--line)}
 .aisle-head:first-child{margin-top:0}
 .meal-day.off{opacity:.85;background:#f4f1ea}
+
+/* ---------- pantry "have it" + paid history (sharp-edged) ---------- */
+.grocery-item label { display: flex; align-items: center; gap: .8rem; flex: 1; cursor: pointer; }
+button.ghost.tiny { padding: .25rem .6rem; font-size: .75rem; white-space: nowrap; }
+.grocery-item.owned { background: var(--accent-soft); }
+.grocery-item.owned .gname { color: var(--accent-deep); }
+.kv { display: flex; justify-content: space-between; align-items: baseline; gap: 1rem;
+  padding: .45rem 0; border-bottom: 1px dotted var(--line); }
+.kv:last-child { border-bottom: none; }

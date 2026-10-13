@@ -25,7 +25,8 @@ function renderInsights() {
     choresUnassigned: chores.length && !members.length ? chores.length : 0,
     members,
     choreCompletions: NL.store.get("choreCompletions", []),
-    choreWeek: NL.store.get("choreWeek", 0)
+    choreWeek: NL.store.get("choreWeek", 0),
+    paidMonth: NL.paidThisMonth(NL.store.get("paidBills", []))
   });
   const tone = (t) => /bill/i.test(t) ? "urgent" : /chore/i.test(t) ? "warn" : "calm";
   $("#insights").innerHTML = insights.map(i =>
@@ -39,6 +40,7 @@ function renderPrefs() {
   $("#budget").value = p.budget || "medium";
   $("#people").value = p.people || 4;
   $("#quickCook").checked = !!p.maxTime;
+  $("#varietyGuard").checked = p.variety !== false;
 }
 
 function renderPlan() {
@@ -127,9 +129,13 @@ function renderDislikeBar() {
 
 function currentPrefs() {
   const saved = NL.store.get("prefs", {});
+  const variety = $("#varietyGuard") ? $("#varietyGuard").checked : saved.variety !== false;
+  const disliked = NL.store.get("disliked", []);
+  const recent = variety ? NL.recentMealIds(NL.store.get("mealHistory", []), 1) : [];
   return Object.assign({}, saved, {
     maxTime: $("#quickCook") && $("#quickCook").checked ? 30 : (saved.maxTime || 0),
-    excluded: NL.store.get("disliked", [])
+    variety,
+    excluded: disliked.concat(recent.filter(id => !disliked.includes(id)))
   });
 }
 
@@ -144,10 +150,14 @@ function applyPins(plan) {
 
 function planWeek() {
   const prefs = { diet: $("#diet").value, budget: $("#budget").value, people: parseInt($("#people").value, 10) || 4,
-                  maxTime: $("#quickCook").checked ? 30 : 0 };
+                  maxTime: $("#quickCook").checked ? 30 : 0,
+                  variety: $("#varietyGuard") ? $("#varietyGuard").checked : true };
   NL.store.set("prefs", prefs);
   const prevPlan = NL.store.get("plan", null);
-  let plan = NL.generateMealPlan(Object.assign({}, prefs, { excluded: NL.store.get("disliked", []) }), R);
+  const baseExcluded = NL.store.get("disliked", []);
+  const recent = prefs.variety ? NL.recentMealIds(NL.store.get("mealHistory", []), 1) : [];
+  const excluded = baseExcluded.concat(recent.filter(id => !baseExcluded.includes(id)));
+  let plan = NL.generateMealPlan(Object.assign({}, prefs, { excluded }), R);
   if (plan.error) { $("#plan").innerHTML = `<p class="empty">${esc(plan.error)}</p>`; return; }
   plan = applyPins(plan);
   // keep "night off" days across re-plans
@@ -155,6 +165,9 @@ function planWeek() {
     plan.days = plan.days.map((d, i) => prevPlan.days[i] && prevPlan.days[i].off ? Object.assign({}, d, { off: true }) : d);
   }
   NL.store.set("plan", plan);
+  // remember served meals so next week's plan can skip them
+  const servedIds = plan.days.filter(d => !d.off && d.meal).map(d => d.meal.id);
+  NL.store.set("mealHistory", NL.recordServedWeek(NL.store.get("mealHistory", []), servedIds));
   NL.store.set("groceryChecked", {});
   renderPlan(); renderGroceries(); renderInsights();
 }
@@ -170,6 +183,9 @@ function renderGroceries() {
   }
   const list = NL.aggregateGroceries(plan);
   const total = list.reduce((s, i) => s + i.estCost, 0);
+  const owned = NL.store.get("pantryOwned", {});
+  const toBuy = NL.toBuyTotal(list, owned);
+  const nOwned = list.filter(g => owned[NL.ownedKey(g.name)]).length;
   const offDays = plan.days.filter(d => d.off).length;
   $("#groceryTotal").textContent = `${list.length} items · built from your meal plan` + (offDays ? ` (${offDays} night${offDays === 1 ? "" : "s"} off)` : "");
   const sections = NL.groupGroceriesByAisle(list);
@@ -177,19 +193,27 @@ function renderGroceries() {
     `<h3 class="aisle-head">${esc(sec.aisle)}</h3>` + sec.items.map(g => {
       const key = (g.name + "|" + g.unit).toLowerCase();
       const isChecked = !!checked[key];
-      return `<label class="grocery-item${isChecked ? " checked" : ""}">
-      <input type="checkbox" data-g="${esc(key)}"${isChecked ? " checked" : ""}>
+      const okey = NL.ownedKey(g.name);
+      const isOwned = !!owned[okey];
+      return `<div class="grocery-item${isChecked ? " checked" : ""}${isOwned ? " owned" : ""}">
+      <label><input type="checkbox" data-g="${esc(key)}"${isChecked ? " checked" : ""}>
       <span class="gname">${esc(g.name)}</span>
-      <span class="gqty">${NL.roundQty(g.qty)} ${esc(g.unit)} · ${NL.fmtMoney(g.estCost)}</span>
-    </label>`;
+      <span class="gqty">${NL.roundQty(g.qty)} ${esc(g.unit)} · ${NL.fmtMoney(g.estCost)}</span></label>
+      <button class="ghost tiny" data-owned="${esc(okey)}" title="Already in your pantry — skip buying it">${isOwned ? "in pantry ✓" : "have it"}</button>
+    </div>`;
     }).join("")
   ).join("") +
-  `<div class="receipt-total"><span>Estimated total</span><span>${NL.fmtMoney(total)}</span></div>`;
+  `<div class="receipt-total"><span>${nOwned ? "To buy (" + nOwned + " owned)" : "Estimated total"}</span><span>${NL.fmtMoney(nOwned ? toBuy : total)}</span></div>`;
   box.querySelectorAll("[data-g]").forEach(c => c.addEventListener("change", () => {
     const ck = NL.store.get("groceryChecked", {});
     if (c.checked) ck[c.dataset.g] = true; else delete ck[c.dataset.g];
     NL.store.set("groceryChecked", ck);
     c.closest(".grocery-item").classList.toggle("checked", c.checked);
+  }));
+  box.querySelectorAll("[data-owned]").forEach(b => b.addEventListener("click", () => {
+    const item = sections.flatMap(s => s.items).find(g => NL.ownedKey(g.name) === b.dataset.owned);
+    NL.store.set("pantryOwned", NL.toggleOwned(NL.store.get("pantryOwned", {}), item ? item.name : b.dataset.owned));
+    renderGroceries();
   }));
 }
 
@@ -217,6 +241,7 @@ function renderBills() {
     let bills = NL.store.get("bills", []);
     const b = bills.find(x => x.id === btn.dataset.paidbill);
     if (!b) return;
+    NL.store.set("paidBills", NL.logBillPaid(NL.store.get("paidBills", []), b));
     if (b.recurring) {
       const next = NL.advanceBill(b);
       bills = bills.map(x => x.id === b.id ? next : x);
@@ -224,12 +249,26 @@ function renderBills() {
       bills = bills.filter(x => x.id !== b.id);
     }
     NL.store.set("bills", bills);
-    renderBills(); renderInsights();
+    renderBills(); renderPaidHistory(); renderInsights();
   }));
   box.querySelectorAll("[data-delbill]").forEach(btn => btn.addEventListener("click", () => {
     NL.store.set("bills", NL.store.get("bills", []).filter(b => b.id !== btn.dataset.delbill));
     renderBills(); renderInsights();
   }));
+}
+
+/* Recently paid — the money already out the door. */
+function renderPaidHistory() {
+  const box = $("#paidHistory");
+  if (!box) return;
+  const hist = NL.store.get("paidBills", []);
+  if (!hist.length) { box.innerHTML = ""; return; }
+  const month = NL.paidThisMonth(hist);
+  const recent = hist.slice(-5).reverse();
+  box.innerHTML = `<div class="card" style="margin-top:1.25rem"><h3>Recently paid</h3>
+    <p class="sub">${NL.fmtMoney(month.total)} out the door so far this month (${month.count} bill${month.count === 1 ? "" : "s"}).</p>
+    ${recent.map(h => `<div class="kv"><span>${esc(h.name)} <span class="muted small">· paid ${esc(h.paidAt)}${h.recurring ? " · " + esc(h.recurring) : ""}</span></span><span><strong>${NL.fmtMoney(h.amount)}</strong></span></div>`).join("")}
+  </div>`;
 }
 
 function addBill() {
@@ -321,7 +360,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("#resetBtn").addEventListener("click", () => {
     if (confirm("Clear all NestLife data on this device?")) {
-      ["prefs","plan","groceryChecked","bills","members","chores","choreWeek","disliked","pinnedMeals","choreCompletions"].forEach(k => NL.store.del(k));
+      ["prefs","plan","groceryChecked","bills","members","chores","choreWeek","disliked","pinnedMeals","choreCompletions","pantryOwned","paidBills","mealHistory"].forEach(k => NL.store.del(k));
       location.reload();
     }
   });
@@ -338,7 +377,7 @@ document.addEventListener("DOMContentLoaded", () => {
     downloadCsv("nestlife-groceries.csv", NL.groceriesToCSV(NL.aggregateGroceries(plan)));
   });
   $("#groceryPrint").addEventListener("click", () => window.print());
-  renderPrefs(); renderPlan(); renderGroceries(); renderBills(); renderFamily(); renderChores(); renderRotation(); renderInsights();
+  renderPrefs(); renderPlan(); renderGroceries(); renderBills(); renderPaidHistory(); renderFamily(); renderChores(); renderRotation(); renderInsights();
   setTab("home");
 });
 })();

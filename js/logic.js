@@ -279,6 +279,74 @@ function fairnessNote(scores, members) {
   return high.join(", ") + " " + (high.length === 1 ? "has" : "have") + " done " + max + " — " + low.join(", ") + " " + (low.length === 1 ? "has" : "have") + " only " + min + ". Time to rebalance.";
 }
 
+// ---------- Pantry: "already have it" ----------
+// owned is a map of lowercase item name -> true (things already in the pantry).
+// Owned items stay visible but drop out of the "to buy" estimated total.
+function ownedKey(name) { return String(name || "").trim().toLowerCase(); }
+
+function toBuyTotal(list, owned) {
+  let total = 0;
+  (list || []).forEach(g => {
+    if (owned && owned[ownedKey(g.name)]) return;
+    total += Number(g.estCost) || 0;
+  });
+  return Math.round(total * 100) / 100;
+}
+
+function toggleOwned(owned, name) {
+  const next = Object.assign({}, owned || {});
+  const k = ownedKey(name);
+  if (next[k]) delete next[k];
+  else next[k] = true;
+  return next;
+}
+
+// ---------- Paid-bill history ----------
+// When a bill is marked paid, log it so the family can see money already out.
+function logBillPaid(history, bill, now) {
+  const next = (history || []).slice();
+  next.push({
+    name: bill.name,
+    amount: Number(bill.amount) || 0,
+    recurring: bill.recurring || null,
+    paidAt: (now || new Date()).toISOString().slice(0, 10)
+  });
+  return next.slice(-100); // keep the log bounded
+}
+
+// Total + count of bills paid in the calendar month containing `now`.
+function paidThisMonth(history, now) {
+  now = now || new Date();
+  const ym = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+  let total = 0, count = 0;
+  (history || []).forEach(h => {
+    if (String(h.paidAt || "").slice(0, 7) === ym) { total += Number(h.amount) || 0; count++; }
+  });
+  return { total: Math.round(total * 100) / 100, count };
+}
+
+// ---------- Meal variety guard ----------
+// Remember which meals were served each week so re-plans can skip last week's.
+// history: [{ at: 'YYYY-MM-DD', mealIds: [...] }], newest last.
+function recordServedWeek(history, mealIds, now) {
+  const next = (history || []).slice();
+  const at = isoDate(now || new Date());
+  const ids = (mealIds || []).filter(Boolean);
+  const last = next[next.length - 1];
+  if (last && last.at === at) last.mealIds = ids;
+  else next.push({ at, mealIds: ids });
+  return next.slice(-12); // keep ~3 months
+}
+
+// Ids served in the most recent `weeksBack` recorded weeks.
+function recentMealIds(history, weeksBack) {
+  const n = Math.max(0, weeksBack || 0);
+  if (!n) return [];
+  const ids = new Set();
+  (history || []).slice(-n).forEach(h => (h.mealIds || []).forEach(id => ids.add(id)));
+  return Array.from(ids);
+}
+
 // AI-ish suggestions: local heuristics + template library.
 function suggestInsights(ctx) {
   const out = [];
@@ -308,6 +376,10 @@ function suggestInsights(ctx) {
     const monthly = monthlyRecurringTotal(ctx.bills);
     if (monthly > 0) out.push("Your recurring bills run about " + fmtMoney(monthly) + " a month.");
   }
+  if (ctx && ctx.paidMonth && ctx.paidMonth.count) {
+    out.push("Paid " + fmtMoney(ctx.paidMonth.total) + " in bills so far this month (" +
+      ctx.paidMonth.count + " bill" + (ctx.paidMonth.count === 1 ? "" : "s") + ") — money already out the door.");
+  }
   if (ctx && ctx.choresUnassigned > 0) {
     out.push("You've got " + ctx.choresUnassigned + " chore" + (ctx.choresUnassigned === 1 ? "" : "s") + " with nobody assigned. Fair rotations keep the peace — add them on the Chores tab.");
   }
@@ -324,7 +396,10 @@ const api = { store, DIETS, BUDGETS, DAYS, generateMealPlan, swapMeal, pinMeal, 
               choreRotation, logChoreDone, choreScores, fairnessNote,
               suggestInsights, fitsDiet, fitsBudget, fitsTime, seededRng,
               AISLES, aisleFor, groupGroceriesByAisle,
-              upcomingBillTotal, monthlyRecurringTotal };
+              upcomingBillTotal, monthlyRecurringTotal,
+              ownedKey, toBuyTotal, toggleOwned,
+              logBillPaid, paidThisMonth,
+              recordServedWeek, recentMealIds };
 
 // browser global
 if (typeof window !== "undefined") window.NestLife = api;

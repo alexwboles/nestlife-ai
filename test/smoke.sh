@@ -100,6 +100,24 @@ console.log('OK');
 " || fail "quick-cook filter"
 pass "quick-cook filter: all meals <= 30 min"
 
+# 15: second-sweep feature functions are exported
+node -e "
+const NL = require('./js/logic.js');
+['ownedKey','toBuyTotal','toggleOwned','logBillPaid','paidThisMonth','recordServedWeek','recentMealIds'].forEach(f => {
+  if (typeof NL[f] !== 'function') throw new Error('missing export: ' + f);
+});
+console.log('OK');
+" || fail "second-sweep exports"
+pass "pantry / paid-history / variety-guard functions exported"
+
+# 16: new UI wiring present
+for needle in varietyGuard paidHistory renderPaidHistory pantryOwned mealHistory recentMealIds; do
+  grep -q "$needle" js/app.js || fail "app.js missing $needle"
+done
+grep -q 'id="varietyGuard"' index.html || fail "index.html missing varietyGuard"
+grep -q 'id="paidHistory"' index.html || fail "index.html missing paidHistory"
+pass "variety guard + paid history + pantry UI wired"
+
 # 14: grocery total renders (bug regression: receipt-total must not be wiped)
 node -e "
 const fs = require('fs');
